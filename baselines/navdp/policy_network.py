@@ -4,7 +4,7 @@ import math
 import numpy as np
 import torch.nn.functional as F
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
-from policy_backbone import *
+from .policy_backbone import *
 
 class NavDP_Policy(nn.Module):
     def __init__(self,

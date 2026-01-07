@@ -73,7 +73,7 @@ imageio-ffmpeg==0.6.0
 importlib_metadata==8.6.1
 ipython==8.12.3
 ipywidgets==8.1.5
-isaaclab==2.0.2
+# isaaclab==2.0.2
 isodate==0.6.1
 itsdangerous==2.2.0
 jedi==0.19.2
