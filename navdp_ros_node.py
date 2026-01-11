@@ -25,7 +25,7 @@ class NavDPNode:
         # params
         self.checkpoint = rospy.get_param('~checkpoint', '/home/doge/models/navdp/navdp-cross-modal.ckpt')
         self.batch_size = int(rospy.get_param('~batch_size', 1))
-        self.stop_threshold = np.array(rospy.get_param('~stop_threshold', [0.5]), dtype=np.float32)
+        self.stop_threshold = np.array(rospy.get_param('~stop_threshold', [-1.0]), dtype=np.float32)
         self.desired_v = float(rospy.get_param('~desired_v', 0.5))
         self.v_max = float(rospy.get_param('~v_max', self.desired_v))
         self.w_max = float(rospy.get_param('~w_max', 1.0))
@@ -60,7 +60,8 @@ class NavDPNode:
 
         # subscribers
         rospy.Subscriber('/camera/color/image_raw/compressed', CompressedImage, self.image_cb, queue_size=1)
-        rospy.Subscriber('/camera/depth/image_rect_raw', Image, self.depth_cb, queue_size=1)
+        rospy.Subscriber('/camera/aligned_depth_to_color/image_raw', Image, self.depth_cb, queue_size=1)
+        # rospy.Subscriber('/camera/depth/image_rect_raw', Image, self.depth_cb, queue_size=1)
         rospy.Subscriber('/nav/goal', PointStamped, self.goal_cb, queue_size=1)
         rospy.Subscriber('/camera/depth/camera_info', CameraInfo, self.camera_info_cb, queue_size=1)
         rospy.Subscriber('/camera/color/camera_info', CameraInfo, self.camera_info_cb, queue_size=1)
@@ -111,14 +112,20 @@ class NavDPNode:
     def depth_cb(self, msg):
         try:
             if msg.encoding in ('16UC1', 'mono16'):
-                d = self.bridge.imgmsg_to_cv2(msg, desired_encoding='16UC1').astype(np.float32)/10000.0
+                raw = self.bridge.imgmsg_to_cv2(msg, desired_encoding='16UC1').astype(np.float32)
+                d = raw * 0.001   # RealSense: mm → m
+                # print(f"msg.encoding={msg.encoding}, depth range: min={np.min(d):.4f}, max={np.max(d):.4f}")
+            elif msg.encoding == '32FC1':
+                d = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1').astype(np.float32)
+                # print(f"msg.encoding={msg.encoding}, depth range: min={np.min(d):.4f}, max={np.max(d):.4f}")
             else:
-                d = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
+                return
             with self._lock:
                 self.latest_depth = d
                 self.latest_depth_ts = msg.header.stamp.to_sec()
         except CvBridgeError as e:
             rospy.logerr(f"CvBridge depth error: {e}")
+
 
     def goal_cb(self, msg: PointStamped):
         with self._lock:
@@ -190,7 +197,8 @@ class NavDPNode:
 
             # NavDP step
             execute_traj, all_traj, all_values, traj_mask = self.navdp_navigator.step_pointgoal(goal_input, image_input, depth_input)
-
+            # print(f"execute_traj shape: {execute_traj.shape}, all_values: {all_values.shape}")
+            
             # fps video
             if self.navdp_fps_writer is not None and traj_mask is not None:
                 self.navdp_fps_writer.append_data(traj_mask)

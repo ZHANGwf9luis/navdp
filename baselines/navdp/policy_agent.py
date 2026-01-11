@@ -60,6 +60,7 @@ class NavDP_Agent:
     def process_image(self,images):
         assert len(images.shape) == 4
         H,W,C = images.shape[1],images.shape[2],images.shape[3]
+        # print(f"[process_image] input shape: {images.shape}, H={H}, W={W}, C={C}")
         prop = self.image_size/max(H,W)
         return_images = []
         for img in images:
@@ -77,6 +78,7 @@ class NavDP_Agent:
         assert len(depths.shape) == 4
         depths[depths==np.inf] = 0
         H,W,C = depths.shape[1],depths.shape[2],depths.shape[3]
+        # print(f"[process_depth] input shape: {depths.shape}, H={H}, W={W}, C={C}")
         prop = self.image_size/max(H,W)
         return_depths = []
         for depth in depths:
@@ -87,6 +89,7 @@ class NavDP_Agent:
             resize_depth = cv2.resize(pad_depth,(self.image_size,self.image_size))
             resize_depth[resize_depth>5.0] = 0
             resize_depth[resize_depth<0.1] = 0
+            # print(f"[process_depth] batch: resize shape {resize_depth.shape}, min {resize_depth.min():.3f}, max {resize_depth.max():.3f}")
             return_depths.append(resize_depth[:,:,np.newaxis])
         return np.array(return_depths)
     
@@ -172,12 +175,36 @@ class NavDP_Agent:
         input_goals = self.process_pointgoal(goals)
         # cv2.imwrite("input_image.jpg",np.concatenate(self.memory_queue[0],axis=0)*255)
         all_trajectory, all_values, good_trajectory, bad_trajectory = self.navi_former.predict_pointgoal_action(input_goals,input_image,input_depth)
+        
         if all_values.max() < self.stop_threshold:
             good_trajectory[:,:,:,0] = good_trajectory[:,:,:,0] * 0.0
             good_trajectory[:,:,:,1] = np.sign(good_trajectory[:,:,:,1].mean())
         
-        print(all_values.max(),all_values.min())
-            
+        # print("all_values shape:", all_values.shape)
+        # print(all_values.max(),all_values.min(),all_values)
+        # gt = good_trajectory
+
+        # print("good_trajectory shape:", gt.shape)
+        # print("dtype:", gt.dtype)
+
+        # print("min:", gt.min(), "max:", gt.max())
+        # print("mean:", gt.mean())
+
+        # print("first batch, first step:")
+        # print(gt[0, 0])
+
+        # print("first batch, first 5 steps:")
+        # print(gt[0, :5])
+        # print("x stats:",
+        #     gt[..., 0].min(),
+        #     gt[..., 0].max(),
+        #     gt[..., 0].mean())
+
+        # print("y stats:",
+        #     gt[..., 1].min(),
+        #     gt[..., 1].max(),
+        #     gt[..., 1].mean())
+
         trajectory_mask = self.project_trajectory(images,all_trajectory,all_values) 
         return good_trajectory[:,0], all_trajectory, all_values, trajectory_mask
     
