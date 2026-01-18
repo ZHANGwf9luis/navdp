@@ -181,7 +181,7 @@ class NavDP_Agent:
             good_trajectory[:,:,:,1] = np.sign(good_trajectory[:,:,:,1].mean())
         
         # print("all_values shape:", all_values.shape)
-        # print(all_values.max(),all_values.min(),all_values)
+        print(all_values.max(),all_values.min())
         # gt = good_trajectory
 
         # print("good_trajectory shape:", gt.shape)

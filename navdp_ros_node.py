@@ -25,10 +25,10 @@ class NavDPNode:
         # params
         self.checkpoint = rospy.get_param('~checkpoint', '/home/doge/models/navdp/navdp-cross-modal.ckpt')
         self.batch_size = int(rospy.get_param('~batch_size', 1))
-        self.stop_threshold = np.array(rospy.get_param('~stop_threshold', [-1.0]), dtype=np.float32)
-        self.desired_v = float(rospy.get_param('~desired_v', 0.2))
+        self.stop_threshold = np.array(rospy.get_param('~stop_threshold', [-0.9]), dtype=np.float32)
+        self.desired_v = float(rospy.get_param('~desired_v', 0.4))
         self.v_max = float(rospy.get_param('~v_max', self.desired_v))
-        self.w_max = float(rospy.get_param('~w_max', 0.1))
+        self.w_max = float(rospy.get_param('~w_max', 0.2))
 
         self.robot_frame = rospy.get_param('~robot_frame', 'body')
         self.world_frame = rospy.get_param('~world_frame', 'camera_init')
