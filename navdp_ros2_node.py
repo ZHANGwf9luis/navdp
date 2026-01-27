@@ -60,10 +60,10 @@ class NavDPNode(Node):
         # Declare parameters (ROS2 style)
         self.declare_parameter('checkpoint', '/home/engineai/models/navdp/navdp-cross-modal.ckpt')
         self.declare_parameter('batch_size', 1)
-        self.declare_parameter('stop_threshold', [-0.9])
+        self.declare_parameter('stop_threshold', [-1.0])
         self.declare_parameter('desired_v', 0.4)
-        self.declare_parameter('v_max', 0.4)  # Default to desired_v
-        self.declare_parameter('w_max', 0.2)
+        self.declare_parameter('v_max', 1.0)  # Default to desired_v
+        self.declare_parameter('w_max', 1.0)
         self.declare_parameter('robot_frame', 'body')
         self.declare_parameter('world_frame', 'world')
         self.declare_parameter('camera_frame', 'body')
@@ -159,7 +159,7 @@ class NavDPNode(Node):
 
         self.goal_sub = self.create_subscription(
             PointStamped,
-            '/nav/goal',
+            '/clicked_point',
             self.goal_cb,
             qos_profile=cmd_qos,
             callback_group=self.callback_group
@@ -341,11 +341,13 @@ class NavDPNode(Node):
             rot = transform.transform.rotation
             q = [rot.x, rot.y, rot.z, rot.w]
 
-            # Convert quaternion to yaw using transforms3d
-            # quaternion format is [x, y, z, w] in transforms3d
+            # ⚠️ transforms3d 需要 (w, x, y, z) 格式，不是 (x, y, z, w)！
             from transforms3d.euler import quat2euler
-            euler = quat2euler(q, axes='sxyz')  # static frame, extrinsic rotations
-            yaw = euler[2]  # z-axis rotation
+            q = [rot.w, rot.x, rot.y, rot.z]  # 改为 (w, x, y, z)
+            euler = quat2euler(q, axes='sxyz')
+            yaw = euler[2]  # yaw is the third element (z-axis rotation)
+            
+            self.get_logger().debug(f"Quat: {q}, Euler: {euler}, Yaw: {yaw:.4f} rad ({np.degrees(yaw):.2f}°)")
 
             return np.array([x, y, yaw], dtype=np.float32)
 
@@ -405,6 +407,7 @@ class NavDPNode(Node):
 
             goal_input = np.array([[goal_cam[0], goal_cam[1], 0]], dtype=np.float32)
 
+            print(f"Goal in camera frame: {goal_cam}")
             # NavDP step
             execute_traj, all_traj, all_values, traj_mask = self.navdp_navigator.step_pointgoal(
                 goal_input, image_input, depth_input
