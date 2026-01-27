@@ -218,3 +218,10 @@ yapf==0.43.0
 yarg==0.1.9
 yarl==1.9.4
 zipp==3.21.0
+transforms3d>=0.4.0
+# ROS2 dependencies (install via apt: sudo apt install ros-humble-rclpy ros-humble-sensor-msgs-py ros-humble-tf2-ros ros-humble-tf2-geometry-msgs ros-humble-cv-bridge)
+# Or via pip if available:
+# rclpy>=3.0.0
+# sensor_msgs_py>=3.0.0
+# tf2_ros>=0.0.0
+# tf2_geometry_msgs>=0.0.0
