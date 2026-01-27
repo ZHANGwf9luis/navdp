@@ -186,8 +186,9 @@ class NavDPNode(Node):
         self.processing_thread = threading.Thread(target=self.processing_loop, daemon=True)
         self.processing_thread.start()
 
-        # Auto-initialize after short delay
-        self.create_timer(0.2, self.auto_initialize)
+        # Auto-initialize after short delay (only once)
+        self._initialized = False
+        self.create_timer(0.2, self.auto_initialize_once)
 
         self.get_logger().info(
             f"NavDP ROS2 node initialized (robot_frame={self.robot_frame}, "
@@ -211,10 +212,13 @@ class NavDPNode(Node):
                 self.get_logger().debug(message)
         # else: silently throttle
 
-    def auto_initialize(self):
-        """Auto-initialize NavDP after node startup"""
+    def auto_initialize_once(self):
+        """Auto-initialize NavDP after node startup (only once)"""
+        if self._initialized:
+            return
         try:
             self.initialize_navdp()
+            self._initialized = True
             self.get_logger().info("NavDP initialized at startup.")
         except Exception as e:
             self.get_logger().warn(f"NavDP initialization failed: {e}")
@@ -300,12 +304,16 @@ class NavDPNode(Node):
                 timeout=rclpy.duration.Duration(seconds=0.5)
             )
 
-            # Convert point to geometry_msgs Point
-            from geometry_msgs.msg import Point
-            point_msg = Point(x=point[0], y=point[1], z=point[2])
+            # Build PointStamped so tf2 can access header.frame_id
+            point_stamped = PointStamped()
+            point_stamped.header.frame_id = from_frame
+            point_stamped.header.stamp = self.get_clock().now().to_msg()
+            point_stamped.point.x = float(point[0])
+            point_stamped.point.y = float(point[1])
+            point_stamped.point.z = float(point[2])
 
             # Transform using tf2_geometry_msgs
-            transformed = tf2_geometry_msgs.do_transform_point(point_msg, transform)
+            transformed = tf2_geometry_msgs.do_transform_point(point_stamped, transform)
             return np.array([transformed.point.x, transformed.point.y, transformed.point.z])
 
         except tf2_ros.TransformException as e:
@@ -369,6 +377,7 @@ class NavDPNode(Node):
 
             # Check if we have all data and it's new
             if img is None or depth is None or goal is None or ts <= self.last_processed_ts:
+                # self.get_logger().info(f"Waiting for data... img: {img is not None}, depth: {depth is not None}, goal: {goal is not None}, ts: {ts}, last_ts: {self.last_processed_ts}")
                 rate.sleep()
                 continue
 
@@ -403,7 +412,9 @@ class NavDPNode(Node):
 
             # FPS video
             if self.navdp_fps_writer is not None and traj_mask is not None:
-                self.navdp_fps_writer.append_data(traj_mask)
+                # imageio expects uint8; cast to suppress float->uint8 warning
+                mask_u8 = np.clip(traj_mask, 0, 255).astype(np.uint8)
+                self.navdp_fps_writer.append_data(mask_u8)
 
             # Publish path
             path_msg = Path()
