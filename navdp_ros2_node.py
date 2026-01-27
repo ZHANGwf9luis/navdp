@@ -60,7 +60,7 @@ class NavDPNode(Node):
         # Declare parameters (ROS2 style)
         self.declare_parameter('checkpoint', '/home/engineai/models/navdp/navdp-cross-modal.ckpt')
         self.declare_parameter('batch_size', 1)
-        self.declare_parameter('stop_threshold', [-1.0])
+        self.declare_parameter('stop_threshold', [-0.5])
         self.declare_parameter('desired_v', 0.4)
         self.declare_parameter('v_max', 1.0)  # Default to desired_v
         self.declare_parameter('w_max', 1.0)
