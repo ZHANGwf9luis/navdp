@@ -418,7 +418,7 @@ class NavDPNode(Node):
             goal_input = np.array([[goal_cam[0], goal_cam[1], 0]], dtype=np.float32)
             # goal_input = np.array([[2.0, 0.0, 0]], dtype=np.float32)  # DEBUG: fixed goal in front
             # goal_input = np.array([[0.0, 2.0, 0]], dtype=np.float32)  # DEBUG: fixed goal to the left
-            goal_input = np.array([[0.0, -2.0, 0]], dtype=np.float32)  # DEBUG: fixed goal to the right
+            # goal_input = np.array([[0.0, -2.0, 0]], dtype=np.float32)  # DEBUG: fixed goal to the right
             # goal_input = np.array([[-2.0, 0.0, 0]], dtype=np.float32)  # DEBUG: fixed goal close in front
 
             print(f"Goal in camera frame: {goal_input}")
