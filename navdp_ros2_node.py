@@ -20,7 +20,7 @@ from rclpy.parameter import Parameter
 from rclpy.callback_groups import ReentrantCallbackGroup
 
 # ROS2 message imports
-from sensor_msgs.msg import Image, CompressedImage, CameraInfo
+from sensor_msgs.msg import Image, CameraInfo  # CompressedImage
 from geometry_msgs.msg import PointStamped, Twist, PoseStamped
 from nav_msgs.msg import Path
 from std_srvs.srv import Trigger
@@ -64,9 +64,10 @@ class NavDPNode(Node):
         self.declare_parameter('desired_v', 0.4)
         self.declare_parameter('v_max', 1.0)  # Default to desired_v
         self.declare_parameter('w_max', 1.0)
-        self.declare_parameter('robot_frame', 'body')
-        self.declare_parameter('world_frame', 'world')
-        self.declare_parameter('camera_frame', 'body')
+        self.declare_parameter('robot_frame', 'base_link')
+        self.declare_parameter('world_frame', 'odom')
+        # self.declare_parameter('camera_frame', 'head_camera_optical_link')
+        self.declare_parameter('camera_frame', 'base_link')
         self.declare_parameter('intrinsic', [])
 
         # Get parameters
@@ -142,8 +143,8 @@ class NavDPNode(Node):
 
         # Subscribers with callback group for thread safety
         self.image_sub = self.create_subscription(
-            CompressedImage,
-            'rgb/image_raw/compressed',
+            Image,  # CompressedImage
+            '/head_camera/rgb/image_raw',  # 'rgb/image_raw/compressed'
             self.image_cb,
             qos_profile=image_qos,
             callback_group=self.callback_group
@@ -151,7 +152,7 @@ class NavDPNode(Node):
 
         self.depth_sub = self.create_subscription(
             Image,
-            'depth/image_raw',
+            '/head_camera/depth/image_raw',
             self.depth_cb,
             qos_profile=image_qos,
             callback_group=self.callback_group
@@ -167,7 +168,7 @@ class NavDPNode(Node):
 
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
-            'depth/camera_info',
+            '/head_camera/camera_info',
             self.camera_info_cb,
             qos_profile=cmd_qos,
             callback_group=self.callback_group
@@ -175,7 +176,7 @@ class NavDPNode(Node):
 
         self.camera_info_color_sub = self.create_subscription(
             CameraInfo,
-            'rgb/camera_info',
+            '/head_camera/camera_info',
             self.camera_info_cb,
             qos_profile=cmd_qos,
             callback_group=self.callback_group
@@ -250,9 +251,11 @@ class NavDPNode(Node):
 
     # ----------------- callbacks -----------------
     def image_cb(self, msg):
-        """Compressed image callback"""
+        """RGB image callback"""
         try:
-            img = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='rgb8')
+            # Use imgmsg_to_cv2 for uncompressed Image messages
+            img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
+            # For CompressedImage: img = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='rgb8')
             with self._lock:
                 self.latest_image = img
                 # Convert timestamp to seconds
@@ -370,21 +373,28 @@ class NavDPNode(Node):
                 depth = self.latest_depth.copy() if self.latest_depth is not None else None
                 goal = self.latest_goal
 
-                # Get latest timestamp
+                # Get latest timestamp from sensor data only (not goal!)
+                # Goal persists once set, so we don't need its timestamp for continuous processing
                 ts = max(
                     getattr(self, 'latest_image_ts', 0.0),
-                    getattr(self, 'latest_depth_ts', 0.0),
-                    getattr(self, 'latest_goal_ts', 0.0)
+                    getattr(self, 'latest_depth_ts', 0.0)
                 )
 
-            # Check if we have all data and it's new
-            if img is None or depth is None or goal is None or ts <= self.last_processed_ts:
-                # self.get_logger().info(f"Waiting for data... img: {img is not None}, depth: {depth is not None}, goal: {goal is not None}, ts: {ts}, last_ts: {self.last_processed_ts}")
+            # Check if we have all required data
+            if img is None or depth is None or goal is None:
+                self.log_throttle("missing_data", 
+                    f"Waiting for data... img: {img is not None}, depth: {depth is not None}, goal: {goal is not None}", 
+                    'info', 2.0)
+                rate.sleep()
+                continue
+
+            # Only skip if sensor data hasn't updated
+            if ts <= self.last_processed_ts:
                 rate.sleep()
                 continue
 
             if self.navdp_navigator is None:
-                self.get_logger().warn("NavDP not initialized.")
+                self.log_throttle("navdp_not_init", "NavDP not initialized.", 'warn', 5.0)
                 rate.sleep()
                 continue
 
@@ -406,8 +416,12 @@ class NavDPNode(Node):
                 continue
 
             goal_input = np.array([[goal_cam[0], goal_cam[1], 0]], dtype=np.float32)
+            # goal_input = np.array([[2.0, 0.0, 0]], dtype=np.float32)  # DEBUG: fixed goal in front
+            # goal_input = np.array([[0.0, 2.0, 0]], dtype=np.float32)  # DEBUG: fixed goal to the left
+            goal_input = np.array([[0.0, -2.0, 0]], dtype=np.float32)  # DEBUG: fixed goal to the right
+            # goal_input = np.array([[-2.0, 0.0, 0]], dtype=np.float32)  # DEBUG: fixed goal close in front
 
-            print(f"Goal in camera frame: {goal_cam}")
+            print(f"Goal in camera frame: {goal_input}")
             # NavDP step
             execute_traj, all_traj, all_values, traj_mask = self.navdp_navigator.step_pointgoal(
                 goal_input, image_input, depth_input
